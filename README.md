@@ -1,4 +1,4 @@
-# RProgFin
+# R Programming for Finance
 R Programming for Finance
 
 1. R Markdown
