@@ -1,0 +1,129 @@
+---
+title: "HTML Widget"
+author: "dearbharat"
+date: "10/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# GDP Choropleth
+
+The `leaflet` library allows us to create interactive maps, including shaded-area maps (choropleth) like the one below.
+
+```{r gdp-choropleth, fig.cap="Choropleth showing per country GDP (Total \\$ in 2009)"}
+library("tidyverse")
+library("gapminder")
+library("glue")
+library("rnaturalearth")
+library("sf")
+library("leaflet")
+library("leaflet.extras")
+
+countries_sf <- countries110 %>%
+  st_as_sf()
+
+pop_palette <- colorNumeric("viridis",
+                            domain = countries_sf$gdp_md_est)
+
+countries_sf %>%
+  filter(! name == "Antarctica") %>%
+  leaflet() %>%
+  # addProviderTiles(providers$Esri.WorldShadedRelief) %>%
+  addPolygons(fillColor = ~pop_palette(gdp_md_est),
+              color = "black",
+              weight = 1,
+              opacity = 1,
+              fillOpacity = 0.7,
+              popup = ~glue("Country: {name}", "<br>",
+                           "Population: {pop_est}",
+                           "<br>",
+                           "GDP: {gdp_md_est}")) %>%
+  addLegend(pal = pop_palette,
+            values = ~gdp_md_est,
+            opacity = 0.7,
+            title = "GDP in $ (2009)", position = "bottomleft") %>%
+  setMapWidgetStyle(style = list(background = "#aacbff"))
+
+
+```
+
+
+```{r setup1, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	fig.pos = "h",
+	out.extra = ""
+)
+```
+
+# Population Growth by Continent
+
+This example demonstrates how to embed `htmlwidgets` in HTML formats. Note that we've demonstrated how `htmlwidgets` can be used with captions.
+
+We need the following packages for this document:
+
+```{r}
+library("gapminder")
+library("tidyverse")
+library("highcharter")
+library("lubridate")
+library("glue")
+library("leaflet")
+library("leaflet.extras")
+library("sf")
+library("rnaturalearth")
+```
+
+To prevent issues with \LaTeX being clever with image placements, the command `\newpage` has been used below.
+
+\newpage
+
+
+The visualisation below was created with `highcharter`. The `highcharter` library provides the ability to create a wide range of beautiful, professional looking charts. 
+
+```{r gapminder-pop-growth, fig.cap="Continental population growth (Source: Gapminder)"}
+gapminder_continents <- gapminder %>%
+  group_by(year, continent) %>%
+  summarise_if(is.numeric, funs(round(mean(as.numeric(.))))) %>%
+  ungroup() %>%
+  mutate(year = ymd(glue("{year}-12-31")))
+  
+highchart(type = "stock") %>%
+  hc_add_series(data = gapminder_continents,
+                type = "line",
+                hcaes(x = year,
+                      y = pop,
+                      group = continent)) %>%
+  hc_plotOptions(series = list(marker = list(enabled = TRUE))) %>%
+  hc_tooltip(xDateFormat = "%Y") %>%
+  hc_legend(enabled = TRUE, reverse = TRUE)
+```
+
+
+# Leaflet
+
+[Leaflet](http://rstudio.github.io/leaflet/)
+
+Leaflet is a JavaScript library for creating dynamic maps that support panning and zooming along with various annotations like markers, polygons, and popups.
+
+```{r}
+library(leaflet)
+pal <- colorQuantile("YlOrRd", NULL, n = 8)
+orstationc <- read.csv("orstationc.csv")
+leaflet(orstationc) %>% 
+  addTiles() %>%
+  addCircleMarkers(color = ~pal(tann))
+```
+
+# Dygraphs
+```{r}
+library(dygraphs)
+dygraph(nhtemp, main = "New Haven Temperatures") %>% 
+  dyRangeSelector(dateWindow = c("1920-01-01", "1960-01-01"))
+```
+

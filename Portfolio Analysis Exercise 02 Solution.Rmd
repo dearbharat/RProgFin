@@ -1,0 +1,549 @@
+---
+title: "Portfolio Analysis"
+author: "dearbharat"
+date: "10/2/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Portfolio Analysis
+
+Diversify investment -> porfolio -> increase return’s expectation and reduce the risk. Hence, we need to test our investment strategy, it is called: backtesting. Backtesting are tested using historical data. We also need to use an online performance monitoring.
+
+## Import Data
+```{r}
+library(tidyquant)
+ko <- getSymbols("ko", from = "2003-01-01", to = "2016-08-30", auto.assign = FALSE)
+pep <- getSymbols("pep", from = "2003-01-01", to = "2016-08-30", auto.assign = FALSE)
+head(cbind(ko, pep))
+```
+
+## Data Manipulation
+
+First, we define ko_pep as the ratio expressing the value of the share price of the Coca Cola company in terms of the share price of PepsiCo.
+
+```{r}
+ko <- Ad(ko)
+pep <- Ad(pep)
+head(cbind(ko, pep))
+```
+
+```{r}
+ko_pep <- ko/pep
+head(ko_pep)
+```
+
+## Data Exploration
+```{r}
+# Make a time series plot of ko_pep
+plot.zoo(ko_pep)
+  
+# Add as a reference, a horizontal line at 1
+abline(h=0.5)
+```
+
+## Portfolio Strategy Question
+How to decide between these two companies? Coca-cola or Pepsi? 30% KO and 70% PEP, or just 100% PEP just because you like Pepsi more?
+
+Several strategies available to choose: 
+1. Put all-in on one basket <- Noobs only! 
+2. Equal weighting 
+3. Market cap weighting 
+4. Mean and variance optimization <- Our goal!
+
+Return.calculate(): calculate the individual asset return Return.portfolio(): calculate the porfolio return
+
+```{r}
+library(PerformanceAnalytics)
+ko_ret <- Return.calculate(ko)
+pep_ret <- Return.calculate(pep)
+head(cbind(ko_ret, pep_ret))
+```
+
+```{r}
+# Remove the first row (NA)
+ko_ret <- ko_ret[(-1),]
+pep_ret <- pep_ret[(-1),]
+```
+
+For portfolio weights, there are options: 
+1. Set initial weight at initial date and never change it. So, the weight of individual stock price in the portfolio will constantly changing because the changes of the price itself. 
+2. Dynamic approach -> we constantly adjusting the weight of the individual asset.
+
+Let’s try to build both models!
+
+```{r}
+# Combine both returns into one variable
+rets <- cbind(ko_ret, pep_ret)
+
+# Create the weights, we divide our money half to each of the asset
+eq_weights <- c(0.5, 0.5)
+
+# Create a portfolio using buy and hold
+pf_bh <- Return.portfolio(R = rets, weights = eq_weights, verbose = TRUE)
+
+# Create a portfolio rebalancing monthly 
+pf_rebal <- Return.portfolio(R = rets, weights = eq_weights, rebalance_on = "months", verbose = TRUE)
+
+# Plot the time-series
+par(mfrow = c(2, 1), mar = c(2, 4, 2, 2))
+plot.zoo(pf_bh$returns)
+plot.zoo(pf_rebal$returns)
+```
+
+Do you see a difference here?
+Both pf_bh and pf_rebal contains useful information that we can extract.
+
+```{r}
+# Create eop_weight_bh
+eop_weight_bh <- pf_bh$EOP.Weight
+
+# Create eop_weight_rebal
+eop_weight_rebal <- pf_rebal$EOP.Weight
+
+# Plot end of period weights
+par(mfrow = c(2, 1), mar=c(2, 4, 2, 2))
+plot.zoo(eop_weight_bh$KO)
+plot.zoo(eop_weight_rebal$KO)
+```
+
+We can see here that: 
+1. The buy and hold strategy, the weights is changes due to the fluctuation of the prices. 
+2. The rebalance strategy, it always try to rebalance it to the initial set weights.
+
+Portfolio Return Analysis is both analyse the past performance and predict the future. How to choose the best portfolio?
+
+We should always consider the risk vs reward. Portfolio management is heavily utilized math, statistics, programming skills and intuition.
+
+How to quantify risk and reward? 
+Reward -> portfolio mean return, it is the expectation return of a portfolio 
+Risk -> portfolio volatility (variance and standard deviation), it is a measure how big the changes of prices againt the mean return
+
+Return is not linear. 50% loss then followed by 50% profit, we only obtain our money 75% from the initial value. final value = initial value * 0.5 * 1.5 = 0.75 * initial value That’s why we won’t use simple arithmetic when calculate returns. 
+
+Instead we will used what we called geometric return
+
+Now let’s try to analyze the sp500 index.
+
+```{r}
+# Fetch price
+sp500 <- getSymbols("^GSPC", from = "1985-01-01", to = "2017-12-30", src = "yahoo", auto.assign = FALSE)
+head(sp500)
+```
+
+```{r}
+# Convert the daily frequency of sp500 to monthly frequency: sp500_monthly
+sp500_monthly <- to.monthly(sp500)
+# Print the first six rows of sp500_monthly
+head(sp500_monthly)
+```
+
+```{r}
+# Create sp500_returns using Return.calculate using the closing prices
+sp500_returns <- Return.calculate(Cl(sp500_monthly))
+# Time series plot
+plot.ts(sp500_returns)
+```
+
+```{r}
+# Produce the year x month table
+table.CalendarReturns(sp500_returns)
+```
+
+```{r}
+# Remove first value because it is NA
+sp500_returns <- sp500_returns[(-1),]
+# Compute the mean monthly returns
+mean(sp500_returns)
+```
+
+
+```{r}
+# Compute the geometric mean of monthly returns
+mean.geometric(sp500_returns)
+```
+
+```{r}
+# Compute the standard deviation
+sd(sp500_returns)
+```
+
+### The (annualized) Sharpe ratio 
+Here we will define risk-free asset is something like money market fund or simply Bank Account. It is depends on you what you want to choose. Money market fund actually not 100% risk-free. Depends on the composition of the fund, if the risk is small enough, we can safely ignore it.
+
+In this stage, you should already understand risk-return tradeoff and its graph representation. 
+
+You will also want to learn about Modern Portfolio Theory, Excess Return Sharpe Ratio.
+
+### Annualized mean and volatility
+
+```{r}
+table.AnnualizedReturns(sp500_returns)
+```
+
+### Time-variation in portfolio performance 
+So far we only view everything as static. In reality, asset price is affected by things like: cycle, news, psychological effect, political, unexpected pandemic, etc. 
+
+That’s why we need to weight more the most recent observation and weight less (or discard) the most distant, it is called: 
+Rolling estimation. The tricky part here is to choose the window length? How should we choose the window length?
+
+Rolling annualized mean and volatility
+
+```{r}
+# Plotting the 12-month rolling annualized mean
+chart.RollingPerformance(R = sp500_returns, width = 12, FUN = "Return.annualized")
+```
+
+```{r}
+# Plotting the 12-month rolling annualized standard deviation
+chart.RollingPerformance(R = sp500_returns, width = 12, FUN = "StdDev.annualized")
+```
+
+```{r}
+# Plotting the 12-month rolling annualized Sharpe ratio, assuming rf = 0
+chart.RollingPerformance(R = sp500_returns, width = 12, FUN = "SharpeRatio.annualized")
+```
+
+To see all together:
+
+
+```{r}
+charts.RollingPerformance(R = sp500_returns, width = 12)
+```
+
+### Using window to analyze specific date range
+
+```{r}
+# Use daily return
+sp500_ret_daily <- Return.calculate(Cl(sp500))
+
+# Fill in window for 2008
+sp500_2008 <- window(sp500_ret_daily, start = "2008-01-01", end = "2008-12-31")
+
+# Create window for 2014
+sp500_2014 <-window(sp500_ret_daily, start = "2014-01-01", end = "2014-12-31")
+
+# Plotting settings
+par(mfrow = c(1, 2) , mar=c(3, 2, 2, 2))
+names(sp500_2008) <- "sp500_2008"
+names(sp500_2014) <- "sp500_2014"
+
+# Plot histogram of 2008
+chart.Histogram(sp500_2008, methods = c("add.density", "add.normal"))
+
+# Plot histogram of 2014
+chart.Histogram(sp500_2014, methods = c("add.density", "add.normal"))
+```
+
+### How does it compare to normal distribution? 
+Is it correct to assume asset return on normal distribution? Of course no. It is almost illogical to use normal distribution on asset return.
+
+Non-normality of the return distribution Asset return tend to be skewed and fat-tailed. It is possible to see more negative returns on the left tail of the distribution.
+
+Two metrics key to understanding the distribution of non-normal returns are skewness and kurtosis. 
+
+```{r}
+# Calculate both skewness and kurtosis in R are very easy
+skewness(sp500_ret_daily)
+```
+
+```{r}
+kurtosis(sp500_ret_daily)
+```
+
+### Semi-Deviation, Value-at-Risk and 5% Expected Shortfall In this stage, you should already understand the terms: 5% expected shortfall and Value-at-Risk 
+
+Semi-deviation is a method of measuring the below-mean fluctuations in the returns on investment. 
+```{r}
+SemiDeviation(sp500_returns)
+```
+
+```{r}
+VaR(sp500_returns, p = 0.05)
+```
+
+```{r}
+ES(sp500_returns, p = 0.05)
+```
+
+### Drawdown 
+We now analyzing the portfolio’s drawdowns, or peak-to-trough decline in cumulative returns. 
+
+```{r}
+table.Drawdowns(sp500_ret_daily)
+```
+
+```{r}
+chart.Drawdown(sp500_ret_daily)
+```
+
+
+**The future are unknown and random ** 
+We will start to shift, from thinking return as past performance, to return as predictions. In this stage, you should already understand the terms: 
+Expected Value, Variance, and Random Variable. 
+
+Correlation between returns We are using ko_ret and pep_ret again.
+
+```{r}
+# Create a scatter plot of returns
+chart.Scatter(ko_ret, pep_ret, xlab = "ko returns", ylab = "pep returns", main = "ko-pep returns")
+
+```
+
+```{r}
+# Find the correlation
+cor(ko_ret, pep_ret)
+```
+
+```{r}
+# Find and visualize the correlation using chart.Correlation
+chart.Correlation(cbind(ko_ret, pep_ret))
+```
+
+```{r}
+# Visualize the rolling estimates using chart.RollingCorrelation
+chart.RollingCorrelation(ko_ret, pep_ret, width = 22) # 22 trading days, about 1 calendar month
+```
+
+```{r}
+chart.RollingCorrelation(ko_ret, pep_ret, width = 252) # 252 trading days, about 1 calendar year
+
+```
+
+### Covariance Matrix
+
+```{r}
+ko <- getSymbols("ko", from = "2003-01-01", to = "2016-08-30", auto.assign = FALSE)
+pep <- getSymbols("pep", from = "2003-01-01", to = "2016-08-30", auto.assign = FALSE)
+aapl <- getSymbols("aapl", from = "2003-01-01", to = "2016-08-30", auto.assign = FALSE)
+ge <- getSymbols("ge", from = "2003-01-01", to = "2016-08-30", auto.assign = FALSE)
+
+```
+
+```{r}
+ret_ko <- Return.calculate(Ad(ko))
+ret_pep <- Return.calculate(Ad(pep))
+ret_aapl <- Return.calculate(Ad(aapl))
+ret_ge  <- Return.calculate(Ad(ge))
+
+```
+
+```{r}
+# Remove NA value in the first row
+ret_ko <- ret_ko[(-1),]
+ret_pep <- ret_pep[(-1),]
+ret_aapl <- ret_aapl[(-1),]
+ret_ge  <- ret_ge[(-1),]
+
+```
+
+```{r}
+return_multi <- cbind(ret_ko, ret_pep, ret_aapl, ret_ge) # you could insert as many return as you like
+
+# Create a vector of returns 
+means <- apply(return_multi, 2, "mean")
+  
+# Create a vector of standard deviation
+sds <- apply(return_multi, 2, "sd")
+
+# Create a scatter plot
+plot(sds, means)
+text(sds, means, labels = colnames(return_multi), cex = 0.7)
+abline(h = 0, lty = 3)
+
+```
+
+
+ Do you see any pattern/cluster here?
+
+Now we will compute the covariance and correlation matrix on the daily returns of the four assets from the previous exercise.
+
+```{r}
+# Create a matrix with variances on the diagonal
+diag_cov <- diag(sds^2)
+
+# Create a covariance matrix of returns
+cov_matrix <- cov(return_multi)
+
+# Create a correlation matrix of returns
+cor_matrix <- cor(return_multi)
+
+# Verify covariances equal the product of standard deviations and correlation
+all.equal(cov_matrix[1,2], as.numeric(cor_matrix[1,2] * sds[1] * sds[2]))
+
+```
+
+Portfolio risk budget
+```{r}
+# Create portfolio weights [arbitrary in this case, for practice purpose]
+weights <- c(0.4, 0.4, 0.1, 0.1)
+# Create volatility budget
+vol_budget <- StdDev(return_multi, portfolio_method = "component", weights = weights)
+# Make a table of weights and risk contribution
+weights_percrisk <- cbind(weights, vol_budget$pct_contrib_StdDev)
+colnames(weights_percrisk) <- c("weights", "perc vol contrib")
+# Print the table
+weights_percrisk
+
+```
+
+
+Modern Portfolio Theory (MPT)
+NB: Post-modern portfolio theory (PMPT) attempts to improve on modern portfolio theory by minimizing downside risk instead of variance.
+
+```{r}
+tickers <- c("AA","AAPL","AXP","BA","BAC","CAT","CVX","DD","DIS","GE","HD","HPQ","INTC","IBM","JNJ","JPM","KO","MCD","MMM","MRK","MSFT","NKE","PFE","PG","TRV")
+# ,"UTX","VZ","WMT","XOM","T"
+first.date = "1991-01-01"
+last.date = "2016-12-31"
+getSymbols(tickers, from=first.date, to=last.date, periodicity = 'monthly')
+
+```
+
+```{r}
+ClosePrices <- lapply(tickers, function(x) Ad(get(x)))
+```
+
+```{r}
+# The process to combine into one dataframe a bit messy here, there should be a better way
+dim2 <- dim(ClosePrices[[1]])[1]
+df_fin = data.frame(matrix(nrow = dim2))
+for (i in 1:length(ClosePrices)){
+  df_fin <- cbind2(df_fin, ClosePrices[i])
+}
+df_fin <- df_fin[,(-1)]
+head(df_fin)
+```
+
+
+```{r}
+stocks_ret <- CalculateReturns(as.xts(df_fin))
+# Drop first row because it is NA
+stocks_ret <- stocks_ret[(-1),]
+head(stocks_ret)
+```
+
+Finding the mean-variance efficient portfolio 
+We will use portfolio.optim function from tseries https://www.rdocumentation.org/packages/tseries/versions/0.10-47/topics/portfolio.optim The only argument needed is the monthly return data on the portfolio components for which the weights need to be determined.
+
+```{r}
+# Load tseries
+library(tseries)
+# Create an optimized portfolio of returns
+opt <- portfolio.optim(stocks_ret)
+
+# Create pf_weights
+pf_weights <- opt$pw
+
+# Assign asset names
+names(pf_weights) <- colnames(stocks_ret)
+
+# Select optimum weights opt_weights
+opt_weights <- pf_weights[pf_weights >= 0.01]
+
+# Bar plot of opt_weights
+barplot(opt_weights)
+```
+
+```{r}
+# Print expected portfolio return
+opt$pm
+
+```
+
+
+```{r}
+# Print expected portfolio volatility
+opt$ps
+
+```
+
+The argument that can be supplied into the portfolio.optim() are: pm: the desired mean portfolio return. 
+riskless: a logical indicating whether there is a riskless lending and borrowing rate. 
+shorts: a logical indicating whether shortsales on the risky securities are allowed. 
+rf: the risfree interest rate. etc…..
+
+This exercise will show the effect of increasing your target return on the volatility of your mean-variance efficient portfolio.
+```{r}
+# Create portfolio with target return of average returns 
+pf_mean <- portfolio.optim(stocks_ret, pm = mean(stocks_ret))
+
+# Create portfolio with target return 10% greater than average returns
+pf_10plus <- portfolio.optim(stocks_ret, pm = 1.1 * mean(stocks_ret))
+
+# Print the standard deviations of both portfolios
+pf_mean$ps
+```
+
+```{r}
+pf_10plus$ps
+
+```
+
+```{r}
+# Calculate the proportion increase in standard deviation
+(pf_10plus$ps - pf_mean$ps) / (pf_mean$ps)
+
+```
+
+In-sample vs. out-of-sample evaluation Split the dataset into two parts: 
+1. Estimation sample: used to find the optimal weights 
+2. Out of sample: evaluation to give a realistic view on portfolio performance
+
+### Split-sample evaluation
+
+```{r}
+# Create returns_estim 
+returns_estim <- window(stocks_ret, end = "2003-12-31")
+
+# Create returns_eval
+returns_eval <- window(stocks_ret, start = "2004-01-01")
+
+# Create vector of max weights
+max_weights <- rep(0.1, ncol(stocks_ret))
+
+# Create portfolio with estimation sample 
+pf_estim <- portfolio.optim(returns_estim, reshigh = max_weights)
+
+# Create portfolio with evaluation sample
+pf_eval <- portfolio.optim(returns_eval, reshigh = max_weights)
+
+# Create a scatter plot with evaluation portfolio weights on the vertical axis
+plot(pf_estim$pw, pf_eval$pw)
+abline(a = 0, b = 1, lty = 3)
+```
+
+By creating two samples using the window() function you can backtest, or evaluate the performance of a portfolio on historical data!
+
+Out of sample performance evaluation This example will illustrate how your returns can change based on the weighting created by an optimized portfolio. You will use the estimation portfolio (pf_estim) to evaluate the performance of your portfolio on the estimation sample of returns (returns_eval).
+
+How severe is the optimality loss? 
+Let’s compare, for the portfolio weights in pf_estim, the performance you expected using the evaluation sample (returns_estim) with the actual return on the out-of-sample period (returns_eval).
+
+```{r}
+# Create returns_pf_estim
+returns_pf_estim <- Return.portfolio(returns_estim, pf_estim$pw, rebalance_on = "months")
+
+# Create returns_pf_eval
+returns_pf_eval <- Return.portfolio(returns_eval, pf_estim$pw, rebalance_on = "months")
+
+```
+
+```{r}
+# Print a table for your estimation portfolio
+table.AnnualizedReturns(returns_pf_estim)
+```
+
+```{r}
+# Print a table for your evaluation portfolio
+table.AnnualizedReturns(returns_pf_eval)
+
+```
+
+ 
+A little bit more sophisticated Read the paper here: https://journal.r-project.org/archive/2011-1/RJournal_2011-1_Ardia~et~al.pdf You may also want to learn more about the package used in this section: https://cran.r-project.org/web/packages/PortfolioAnalytics/vignettes/portfolio_vignette.pdf
