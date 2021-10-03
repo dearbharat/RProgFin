@@ -1,0 +1,809 @@
+---
+title: "Financial Trading Exercise"
+author: "dearbharat"
+date: "10/2/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Install Quant Strat
+
+We will how to construct a basic trading strategy in quantstrat, R’s industrial-strength backtesting platform developed by Brian Peterson, Director of Algorithmic Trading at DV Trading. You’ll build a trading strategy in quantstrat from start to finish, including the code to set up a new strategy, as well as the design of indicators, signals, and rules for your strategy. By the end, you’ll be ready to design and implement your own trading strategies directly in R!
+
+quantstrat is currently only available on GitHub. If you want to install it on your own machine, you first need to remotes package.
+
+```{r installation, include=FALSE}
+# install.packages("devtools") # if not installed
+# install.packages("FinancialInstrument") #if not installed
+# install.packages("PerformanceAnalytics") #if not installed
+
+# next install blotter from GitHub
+# devtools::install_github("braverock/blotter", force = TRUE)
+# next install quantstrat from GitHub
+# devtools::install_github("braverock/quantstrat", force = TRUE)
+library(quantstrat)
+library(blotter)
+```
+
+### Mechanics of trading
+
+**Trend trading** (also divergence or momentum), which is a bet that a quantity, such as a price, will keep moving in its current direction.
+
+**Reversion trading** (also convergence, cycle, or oscillation), which is a bet that a quantity, such as a price, will reverse.
+
+### What is overfitting
+
+When developing a trading system, a major pitfall that can creep into system development is the desire to find a strategy that worked phenomenally in the past. This is known as overfitting. Research by leading authors in the quantitative field has shown that not only is an overfitted system unlikely to generate profits in the future, but also that its performance can lead to losses.
+
+
+### Getting financial data
+
+```{r getdata, message=FALSE, warning=FALSE, include=FALSE}
+# Get SPY from yahoo
+library(tidyquant)
+getSymbols("SPY", 
+           from = "2000-01-01", 
+           to = "2016-06-30", 
+           src = "yahoo", 
+           adjust = TRUE)
+
+```
+
+```{r}
+# Plot the closing price of SPY
+plot(Cl(SPY))
+
+```
+
+
+### Adding indicators to financial data
+
+Adding a moving average to financial data
+
+```{r}
+# Add a 200-day SMA using lines()
+lines(SMA(Cl(SPY), n = 200), col = "red")
+
+```
+
+## Setting up a Strategy
+
+```{r, include=FALSE}
+# Load the quantstrat and quantmod
+library(quantstrat)
+library(quantmod)
+
+```
+
+### Initial settings
+```{r}
+# Create initdate, from, and to strings
+initdate <- "1999-01-01"
+from <- "2003-01-01"
+to <- "2015-12-31"
+
+# Set the timezone to UTC
+Sys.setenv(TZ = "UTC")
+
+# Set the currency to USD 
+currency("USD")
+
+# Define your trade size and initial equity
+tradesize <- 100000
+initeq <- 100000
+
+# Define the names of your strategy, portfolio and account
+strategy.st <- "firststrat"
+portfolio.st <- "firststrat"
+account.st <- "firststrat"
+
+# Remove the existing strategy if it exists
+# rm.strat(strategy.st)
+
+```
+
+### Retrieve Stock Price Data
+```{r , warning=FALSE}
+# Retrieve SPY from yahoo
+getSymbols("SPY", from = from, to = to, src = "yahoo", adjust = TRUE)
+# Use stock() to initialize SPY and set currency to USD
+stock("SPY", currency = "USD")
+
+```
+
+## Initiate Account Portfolio and Strategy
+
+1. Setting up a strategy
+quantstrat needs setup before we start trading.It's important to get these things correct, and stored away in a place that can be easily changed for future strategies.
+
+2. Trade size and initial equity
+In quantstrat, trade size and initial equity are important if one hopes to be able to work in returns space, as opposed to simply profit and loss space (aka P&L space). The trade size is the base line amount for risking on one trade, and the initial equity is your total account equity. Working in returns space allows for many more functions from the PerformanceAnalytics library which use returns as an input (and not P&L) to analyze your strategy.
+
+3. Three important objects
+Furthermore, one needs to initialize names for the **account, the portfolio, and the strategy**. The way to think of this hierarchy is this: an account may contain one or multiple portfolios, and each portfolio may contain one or multiple strategies.
+
+4. Naming account, portfolio, and strategy
+We will be working with one account, one portfolio, and one strategy.
+
+5. Removing existing strategy
+Furthermore, if a strategy already exists in your working environment, it cannot be re-run. Therefore, you need to remove the strategy if one wishes to re-run a slightly modified variant of the strategy.
+
+6. Initialize…
+Lastly, you need to formally initialize the portfolio, account, orders, and strategy objects.
+
+7. Initializing portfolio
+In order, initializing the portfolio is the first step in this process. A portfolio, before running your strategy, is a set of assets, and the initialization date for your strategy. In order to initialize your portfolio, you need to pass in your portfolio name (in this case, portfolio-dot-st), the assets in this portfolio (in this case, LQD), the initialization date, and the currency which you defined earlier on.
+
+8. Initializing account
+Next, you will initialize the account. The account in quantstrat holds all portfolios. The arguments to the initAcct command are the account name (in this case, account-dot-st), the names of all the portfolios inside it (in this case, just portfolio-dot-st), the initialization date, the currency, and the initial equity, both defined earlier.
+
+9. Initializing orders
+Next, you need to initialize orders. This command is simpler in that it only requires a name of the portfolio which will hold the orders, and the initialization date after which these orders begin.
+
+10. Initializing strategy
+Finally, you initialize the strategy, which just takes in a strategy name, and the store = TRUE command.
+
+11. Overview
+Essentially, you'll need to have all of these commands stored in an initialization master file that you can modify. To put it succinctly, at the highest level, you have an account. An account in quantstrat is, like in real life, something that contains portfolios, which themselves contain assets. On the lower level, quantstrat needs to initialize orders--that is, a container for holding the history of transactions to buy or sell assets. Lastly, a strategy is a set of instructions on how to buy and sell these various assets.
+
+```{r}
+# Initialize the portfolio
+initPortf(portfolio.st, symbols = "SPY", initDate = initdate, currency = "USD")
+
+# Initialize the account
+initAcct(account.st, portfolios = portfolio.st, initDate = initdate, currency = "USD", initEq = initeq)
+
+# Initialize the orders
+initOrders(portfolio.st, initDate = initdate)
+
+# Store the strategy
+strategy(strategy.st, store = TRUE)
+```
+
+
+## Indicators
+
+1. Introduction to indicators
+Welcome to the third chapter, indicators.
+
+2. Why use indicators?
+To motivate this chapter, the salient point to keep in mind is that market data is noisy, messy, and generally, prone to toying with systems and emotions alike.
+
+3. What are indicators?
+In order to try and make sense of this data, trading systems employ indicators, which are transformations of data that make some sort of tradeoff. Usually, this tradeoff is lag for smoothness. An indicator attempts to paint a clearer picture of what occurs in the price movement of the asset under analysis, but pays for it by needing to look at past data, which means that it might not react quickly to sudden developments. Better-designed indicators try to get more smoothness without sacrificing responsiveness.
+
+4. Indicator examples
+Neverteheless, there are some fairly famous indicators. The 200-day simple moving average is a filter, or more colloquially, a trend indicator that is the basic average of the past two hundred days, usually of the closing prices. Its purpose is to work as a slow moving average that signals an expectation of rising prices when some faster metric is above it, such as closing prices, a 50-day moving average, and so on.
+
+5. Indicator examples
+Another type of famous indicator is the relative strength index, or RSI, that's an oscillating indicator. The RSI, and other oscillating indicators like it, do not take values on the scale of the price of the original asset, but instead take values between 0 to 100, 0 to 1, or values that are centered around zero. Many times, the purpose of such oscillating indicators is to use a short lookback to predict when a price has temporarily decreased and is predicted to increase over the next several days. Between systems that may depend on short-term oscillation indicators like a 2-day relative-strength index, to very long-term trading systems such as a dual moving average crossover system, indicators can create a multitude of strategies.
+
+6. In this class
+The strategy we will analyze in this class will be one that combines a basic moving average crossover as a filter with an oscillation indicator to enter positions. Furthermore, the oscillator you will develop for this class is not found in any R package, proving that you can develop your own indicators, so long as you have the imagination for it.
+
+
+The SMA and RSI functions
+
+```{r}
+# Create a 200-day SMA
+spy_sma <- SMA(x = Cl(SPY), n = 200)
+
+# Create an RSI with a 3-day lookback period
+spy_rsi <- RSI(price = Cl(SPY), n = 3)
+
+```
+
+
+Visualize a trend indicator
+
+```{r}
+# Plot the closing prices of SPY
+plot(Cl(SPY))
+
+# Overlay a 200-day SMA
+lines(SMA(Cl(SPY), n = 200), col = "red")
+
+
+```
+
+Visualize an reversion indicator
+
+```{r}
+# Plot the closing price of SPY
+plot(Cl(SPY))
+
+# Plot the RSI 2
+plot(RSI(Cl(SPY), n = 2))
+
+```
+
+
+### Indicator mechanics
+
+1. Indicator mechanics
+The function that adds an indicator, unsurprisingly, is called add dot indicator. It has five parts.
+
+2. Five steps to calling indicators
+To start off, one starts off the function with an add-DOT-indicator call. The first argument is the name of your strategy, which should be saved as a variable, as you'll be using it ubiquitously. So far, we've been using strategy dot ST (that is, strategy dot string), and will continue to use it throughout implementing our strategy. Next, you need the name of the function that your indicator will call. The functions found inside the TTR package, such as SMA (the function call for computing moving average), RSI (the function call for computing the relative strength index) and so on, are little different than standard R functions aside from the fact that since all of quantstrat rests on a foundation of a time series package, that these functions produced ordered output and use other subroutines that depend on their inputs being a time series. In addition to the name of the function, one needs to parameterize the function in the arguments input into the add-DOT-indicator call. This is a list object, and will be different for every function. Lastly, one needs to label the function. This label is what quantstrat will use to find your indicator when you write other functions that look for it later.x
+
+3. Using add.indicator()
+This is what the code looks like. Essentially, it's a five step process. One: call the add-dot-indicator function. Two: let it know which strategy to add the indicator to. Three: specify which function will be used to generate the indicator. Four: add the inputs to the indicator function. Five: add a label to name the output column.
+
+4. Another way to think about indicators
+Another way to think of adding, or rather, applying, indicators is like this: indicators are similar to R's apply family of functions. Just as R's apply functions call the apply function, specify a data set, specify a function, and add arguments to the function, so too does the add-dot-indicator command call the add-dot-indicator function, specify a strategy, specify a function, add arguments to the function, and then label it. The only difference is that while you might use the assignment arrow to define the output of an apply statement, with the add-dot-indicator command, you define the result with a label, that is, the last argument of add-dot-indicator.
+
+```{r}
+# Add a 200-day SMA indicator to strategy.st
+add.indicator(strategy = strategy.st, 
+              
+# Add the SMA function
+name = "SMA", 
+              
+# Create a lookback period
+arguments = list(x = quote(Cl(mktdata)), n = 200), 
+              
+# Label your indicator SMA200
+label = "SMA200")
+
+```
+
+
+### Implementing an indicator - II
+
+```{r}
+# Add a 50-day SMA indicator to strategy.st
+add.indicator(strategy = strategy.st, 
+              
+              # Add the SMA function
+              name = "SMA", 
+              
+              # Create a lookback period
+              arguments = list(x = quote(Cl(mktdata)), n = 50), 
+              
+              # Label your indicator SMA50
+              label = "SMA50")
+
+
+```
+### Implementing an indicator - III
+```{r}
+# Add an RSI 3 indicator to strategy.st
+add.indicator(strategy = strategy.st, 
+              
+              # Add the RSI 3 function
+              name = "RSI", 
+              
+              # Create a lookback period
+              arguments = list(price = quote(Cl(mktdata)), n = 3), 
+              
+              # Label your indicator RSI_3
+              label = "RSI_3")
+
+```
+
+
+### Code your own indicator
+
+```{r}
+# Write the calc_RSI_avg function
+calc_RSI_avg <- function(price, n1, n2) {
+  
+  # RSI 1 takes an input of the price and n1
+  RSI_1 <- RSI(price = price, n = n1)
+  
+  # RSI 2 takes an input of the price and n2
+  RSI_2 <- RSI(price = price, n = n2)
+  
+  # RSI_avg is the average of RSI_1 and RSI_2
+  x <- (RSI_1 + RSI_2)/2
+  
+  # Your output of RSI_avg needs a column name of"RSI_avg"
+  colnames(x) <- "RSI_avg"
+  return(x)
+}
+
+# Add this function as RSI_3_4 to your strategy with n1 = 3 and n2 = 4
+add.indicator(strategy.st, name = "calc_RSI_avg", arguments = list(price=quote(Cl(mktdata)), n1 = 3, n2 = 4), label = "RSI_3_4")
+
+```
+
+
+### Code your own indicator - II
+
+```{r}
+# Declare the DVO function
+DVO <- function(HLC, navg = 2, percentlookback = 126) {
+  
+  # Compute the ratio between closing prices to the average of high and low
+  ratio <- Cl(HLC)/((Hi(HLC) + Lo(HLC))/2)
+  
+  # Smooth out the ratio outputs using a moving average
+  avgratio <- SMA(ratio, n = navg)
+  
+  # Convert ratio into a 0-100 value using runPercentRank()
+  out <- runPercentRank(avgratio, n = percentlookback, exact.multiplier = 1) * 100
+  colnames(out) <- "DVO"
+  return(out)
+}
+
+# Add the DVO indicator to your strategy
+add.indicator(strategy = strategy.st, name = "DVO",
+              arguments = list(HLC = quote(HLC(mktdata)), navg = 2, percentlookback = 126),
+              label = "DVO_2_126")
+
+```
+```{r}
+# Use applyIndicators to test out your indicators
+test <- applyIndicators(strategy = strategy.st, mktdata = OHLC(SPY))
+
+
+```
+
+```{r}
+# Subset your data between Sep. 1 and Sep. 5 of 2013
+test_subset <- test["2013-09-01/2013-09-05"]
+
+```
+
+
+## Signals
+
+
+1. Introduction to signals
+Welcome to the chapter on signals.
+
+2. What are signals?
+Signals occur from the combination of market data and indicators, or indicators with other indicators. Simply, signals are events that may tell you at which point in time you may wish to buy or sell an asset. For instance, a trend-following strategy may signal to buy an asset when a moving average with a shorter lookback period crosses over one with a longer lookback period, such as a 50 day moving average crossing above a 200 day moving average. A reversion strategy may signal to buy when a certain oscillator crosses under 20, on a scale from 0 to 100. Still, other signals can occur only when multiple conditions are met.
+
+3. Using add.signal()
+In this chapter, we will investigate all such functionality I just mentioned. While this may sound intimidating at first, when you break it down into its pieces, you will find that signals are actually similar to, but simpler than indicators. Like indicators, they take in a signal function, its arguments, and need a label. Unlike indicators, which are infinitely customizable, the few signal functions in quantstrat can cover almost all phenomena found in trading, and careful signal specification can go very far in terms of specifying a strong and logical strategy. Essentially, they work similarly in structure to the add-dot-indicator function in that they call the add-dot-signal function, the name of the strategy, the function name of the signal function, the arguments to the signal function, and finally, a label. Again, like the add-dot-indicator function, this is also similar to the apply family of functions from R in that one specifies a function within an apply call, and provides its arguments.
+
+4. Four types of signals
+If this still seems a little bit hazy to you, in this chapter, you will get an intuitive feel for the functionality of some of these signals. In fact, there are only four types of signals: sigComparison -- which is a signal permanently comparing two differing quantities (such as two moving averages), sigCrossover -- which is identical, except only evaluates to TRUE on the day of the condition changing from FALSE to TRUE, sigThreshold, which states whether or not a dynamic quantity is larger (or smaller) than a static number, with both the option of evaluating it in the context of a sigComparison or sigCrossover signal, but against flat quantities instead. Lastly, the sigFormula signal function allows for the creation of complex signals by combining simpler ones.
+
+5. Examples
+To get a visual idea of what signals do, we will have a look at two diagrams. This first diagram visualized the principles of sigCrossover and sigComparison. The sigCrossover and sigComparison signals are very useful when dealing with moving averages and other such filters. The sigCrossover signal is concerned only when one moving averages crosses another, while the sigComparison signal is concerned about the relationship as a whole.
+
+6. Examples
+With sigThreshold, the same idea applies except with an indicator related to static quantities, such as an less than 20. However, rather than need two separate signal functions, sigThreshold simply makes use of a cross argument, having the function mimic sigCrossover when TRUE and sigComparison when FALSE.
+
+
+A signal is an interaction of market data with indicators, or indicators with other indicators, which tells you whether you may wish to buy or sell an asset. Signals can be triggered for a variety of reasons. For example, a signal may be triggered by a shorter lookback moving average going from less than to greater than a longer lookback moving average. Another signal may be triggered when an oscillator goes from being above a certain set quantity to below, and so on.
+
+You will see various ways in which indicators interact with each other. To keep thing simple, you will remove all of the RSI indicators and stick to the DVO (David Varadi’s Oscillator) indicator you implemented earlier.
+
+Exercise: Subset test between September 10th, 2010, and October 10th, 2010, using test["YYYY-MM-DD/YYYY-MM-DD"]
+
+Is SMA50 greater than or less than SMA200 on September 20?
+
+
+You will manually do a sigThreshold-type evaluation without yet calling the signal. sigThreshold is a signal threshold argument which assesses whether or not a value is above or below a certain static quantity. you will apply simple moving averages and the DVO you implemented earlier.
+
+Exercise: Subset test between September 10th, 2010, and October 10th, 2010, using test["YYYY-MM-DD/YYYY-MM-DD"]
+
+Is DVO greater or smaller than 20 on September 30?
+
+### sigComparison and sigCrossover
+
+1. sigComparison and sigCrossover
+
+2. Trend indicators
+The first two types of signals I'd like to discuss are what I like to call the trend signals. They are sigCrossover and sigComparison. Both of these compare two variable quantities against one another. The easiest and most intuitive example that comes to mind is comparing two moving averages. In a classical trend-following strategy, a buy signal may be sent out when a moving average with a shorter lookback crosses above a longer lookback moving average, such as a 50-day simple moving average crossing above a 200-day simple moving average. A classical trend-following strategy may choose to buy in such a situation.
+
+3. Structure
+The mechanics of these two signal functions are in fact, identical, outside from the function name. They both take in arguments of two columns, and the relationship between them. Use gt for greater than, lt for less than, eq for equal to, lte for less than or equal to.
+
+4. Structure
+So if you wanted to specify a crossover of the 50 and 200 day simple moving averages, you would use the sigCrossover function, and you would enter SMA50 and SMA200 as the columns, with gt as the relationship. However, if you simply wanted all trading to take place while the 50-day simple moving average was above the 200-day simple moving average, you would use the exact same arguments, but simply use the sigComparison function instead of the sigCrossover function. In both cases, just as with indicators, signals you add to your strategy require a label so that added rules, which we will see next chapter, can find them. In this pair of examples, the first example creates a signal called longFilter when the 50-day simple moving average is above the 200-day moving simple average, and the second example creates a signal called filterExit when the 50-day simple moving average crosses under the 200.
+
+5. Examples
+Here's the picture you saw before to demonstrate what a sigCrossover and sigComparison signal aim to do. A sigCrossover is concerned about when a relationship between two variable quantities (such as two moving averages) first changes, while a sigComparison is concerned about the relationship as a whole. A sigCrossover is usually the signal desired for a transaction, while a sigComparison is the signal desired to denote a market condition favorable for other trading signals.
+
+```{r}
+# Add a sigComparison which specifies that SMA50 must be greater than SMA200, call it longfilter
+add.signal(strategy.st, name = "sigComparison", 
+           
+           # We are interested in the relationship between the SMA50 and the SMA200
+           arguments = list(columns = c("SMA50", "SMA200"), 
+                            
+                            # Particularly, we are interested when the SMA50 is greater than the SMA200
+                            relationship = "gt"),
+           
+           # Label this signal longfilter
+           label = "longfilter")
+
+```
+
+
+### Using sigCrossover
+
+
+
+```{r}
+# Add a sigCrossover which specifies that the SMA50 is less than the SMA200 and label it filterexit
+add.signal(strategy.st, name = "sigCrossover",
+           
+           # We're interested in the relationship between the SMA50 and the SMA200
+           arguments = list(columns = c("SMA50", "SMA200"),
+                            
+                            # The relationship is that the SMA50 crosses under the SMA200
+                            relationship = "lt"),
+           
+           # Label it filterexit
+           label = "filterexit")
+```
+
+### Using sigThreshold - I
+
+
+1. sigThreshold
+2. About sigThreshold
+A third signal function in quantstrat is called the sigThreshold function. Unlike sigComparison and sigCrossover, sigThreshold exists for the purpose of dealing with bounded indicators interacting with critical (and most likely, fixed) values. For instance, when using oscillating types of indicators such as an RSI, or with our strategy, the DVO, these indicators will take a bounded value. In our case, this is between 0 and 100, but in other cases, you may be dealing with a running probability value (between 0 and 1), rolling ratios that center on 0 (for instance, the Z score is a ratio of mean to standard deviation), a ratio-adjusted price difference between two instruments, and so on. In all such cases, rather than compare the value of an indicator to one long vector with one quantity (for instance, imagine a vector spanning 15 years whose sole value is 20 every single day), you simply use the sigThreshold function, and specify that particular threshold as an argument.
+
+3. Structure
+The sigThreshold function is very similar to the sigCrossover and sigComparison signals in that both need the strategy name, the signal function, some arguments, and a label. Unlike the sigCrossover and sigComparison functions, however, sigThreshold wraps the comparison vs. crossover functionality into one new argument called the, aptly named, cross argument. Specifying cross equal to TRUE mimics the sigCrossover signal function in that the signal only occurs on the event of a threshold crossover, while cross set to FALSE mimics the sigComparison signal function. Furthermore, sigThreshold only takes in one column from your strategy, and a static threshold against which to compare it, using the same relationship syntaxes as sigCrossover and sigComparison.
+
+4. Examples
+Here are some examples of syntax using sigThreshold. In the first example, sigThreshold is used to mimic a sigComparison signal, and in the second, it is used to mimic sigCrossover.
+
+5. Examples
+For a visual example, one can use a cross equals TRUE argument to generate a signal for a transaction, while a cross equals FALSE argument allows a strategy to use the sigThreshold signal to specify a favorable environment for making a trade. As you can see, the sigThreshold function can cover when the indicator first crosses under the green line, or when it stays under. Both of these types of nuances will eventually matter.
+
+
+
+```{r}
+# Implement a sigThreshold which specifies that DVO_2_126 must be less than 20, label it longthreshold
+add.signal(strategy.st, name = "sigThreshold", 
+           
+           # Use the DVO_2_126 column
+           arguments = list(column = "DVO_2_126", 
+                            
+                            # The threshold is 20
+                            threshold = 20, 
+                            
+                            # We want the oscillator to be under this value
+                            relationship = "lt", 
+                            
+                            # We're interested in every instance that the oscillator is less than 20
+                            cross = FALSE), 
+           
+           # Label it longthreshold
+           label = "longthreshold")
+```
+
+### Using sigThreshold() - II
+
+```{r}
+# Add a sigThreshold signal to your strategy that specifies that DVO_2_126 must cross above 80 and label it thresholdexit
+add.signal(strategy.st, name = "sigThreshold", 
+           
+           # Reference the column of DVO_2_126
+           arguments = list(column = "DVO_2_126", 
+                            
+                            # Set a threshold of 80
+                            threshold = 80, 
+                            
+                            # The oscillator must be greater than 80
+                            relationship = "gt", 
+                            
+                            # We are interested only in the cross
+                            cross = TRUE), 
+           
+           # Label it thresholdexit
+           label = "thresholdexit")
+```
+
+### Using sigFormula()
+
+1. sigFormula
+2. About sigFormula
+The last signal function to introduce is sigFormula. Simply, this is a function that uses string evaluation to mix and match existing indicators and signals in order to form ensemble signals. For instance, in many trading systems, a signal (such as an oscillator signaling that the price has seen a sufficient pullback) will only be acted upon if it occurs in a favorable market environment (such as a 50-day simple moving average being above a 200-day simple moving average). For instance, in a market with falling prices, such as the U.S. equity market in 2008, prices were not simply seeing a temporary dip, but were in the process of a 55% drawdown. For those unaware, a drawdown is the largest peak to trough one has suffered. For instance, a strategy that starts off with a hundred dollars, makes fifty dollars, and then sinks back down to seventy five dollars would have a max drawdown of fifty percent. In such a massive market drawdown, when a long term trend is highly negative, entering into a contrarian position could risk large losses. In short, a contrarian trade should make sure it is buying a temporary pullback, and not a large decline.
+
+3. Structure
+To this end, the sigFormula function allows for exceptional flexibility in creating signals that are combinations of other signals. The way to use a sigFormula function is through calling it in the same way as sigComparison, sigCrossover, and sigThreshold functions. However, rather than having the arguments explicitly stated as arguments to the signal function, one passes in a logical string to the formula argument of sigFormula. If this seems daunting, it actually isn't. The statement passed to the formula argument of sigFormula is nothing more than the kind of argument one would write inside an if statement. For instance, if both statement 1 and statement 2 need to be true, then in base R, one would write if(statement_1 & statement_2). It's no different for the formula argument, aside from the text being a quote, and not needing the if statement and parentheses. I personally use it to combine signals, rather than indicators.
+
+4. Example
+In the example, you can see a very simple use case in that when longThreshold and longFilter both become TRUE, a signal called longEntry will display a TRUE output. Finally, sigFormula is one reason among others that it is so vital to have unique and descriptive labeling for your indicators and signals. In order to truly get the most flexibility out of features like sigFormula, quantstrat needs to be able to quickly find the indicator and/or signal columns you refer to.
+
+
+
+```{r}
+# Create your dataset: test
+test_init <- applyIndicators(strategy.st, mktdata = OHLC(SPY))
+test <- applySignals(strategy = strategy.st, mktdata = test_init)
+```
+
+**Combining signals - I**
+
+You’ll want to create a signal when BOTH longfilter and longthreshold are equal to 1. 
+
+Exercise: Have a look at test on October 8, 2013. Are longfilter and longthreshold both equal to 1 on that date?
+
+**Combining signals - II**
+
+
+```{r}
+# Add a sigFormula signal to your code specifying that both longfilter and longthreshold must be TRUE, label it longentry
+add.signal(strategy.st, name = "sigFormula",         
+           # Specify that longfilter and longthreshold must be TRUE
+           arguments = list(formula = "longfilter & longthreshold", 
+                            
+                            # Specify that cross must be TRUE
+                            cross = TRUE),
+           
+           # Label it longentry
+           label = "longentry")
+
+```
+     
+## Rules
+
+1. Introduction to rules
+Welcome to the chapter on rules in quantstrat.
+
+2. What are rules?
+Rules are a way for you to specify how exactly you will create your transaction once you decide you wish to execute on a signal. That is, given that a particular signal value has generated a TRUE statement, how much are you looking to buy or sell? In terms of complexity, rules are the most involved of the three structures in quantstrat -- indicators, signals, and rules. While indicators and signals are fairly straightforward, rules have many more parts, and a great deal of customization. While most of this customization is beyond the scope of this course, eventually, you will know how to use rules in conjunction with order sizing functions, and be able to make use of market orders that can change the size of the position based on various other inputs.
+
+3. Using add.rule()
+Because of the complicated structure of add-dot-rule(), you will be exposed to new arguments in each video of this chapter. First and foremost, there are two types of rules within the scope of this class: enter rules and exit rules. Enter rules are rules that are about establishing a position--namely, in this case, buying shares of an ETF. Exit rules are rules dedicated to taking your money out of an asset, and converting it back into cash, ready for re-use. In the scope of an add-dot-rule call, the rule type input will take the value of enter or exit. One key difference between rules and indicators or signals is that rules only use one catch-all function for almost all inputs. It is called ruleSignal. Most of the arguments for rules will serve as arguments to ruleSignal. Furthermore, like indicators and signals before them, rules also reference existing columns in your strategy. These existing columns are denoted by the label argument in your add-dot-signal calls. The sigcol argument is the input that quantstrat uses to find existing signal columns in your strategy. Next, ruleSignal takes in a sigval argument. This argument tells quantstrat what value within the particular signal column triggers a transaction. While this value can be something other than TRUE, it is fairly good practice to set this argument to TRUE if your signal columns are set up correctly to only return TRUE when you potentially want to enter into a transaction.
+
+
+Using add.rule() to implement an exit rule
+```{r}
+# Fill in the rule's type as exit
+add.rule(strategy.st, name = "ruleSignal", 
+         arguments = list(sigcol = "filterexit", sigval = TRUE, orderqty = "all", 
+                        ordertype = "market", orderside = "long", 
+                        replace = FALSE, prefer = "Open"), 
+         type = "exit")
+
+```
+
+**Specifying sigcol in add.rule()**
+
+```{r}
+# Fill in the sigcol argument in add.rule()
+add.rule(strategy.st, name = "ruleSignal", 
+         arguments = list(sigcol = "filterexit", sigval = TRUE, orderqty = "all", 
+                        ordertype = "market", orderside = "long", 
+                        replace = FALSE, prefer = "Open"), 
+         type = "exit")
+
+```
+
+**Specifying sigval in add.rule()**
+```{r}
+# Fill in the sigval argument in add.rule()
+add.rule(strategy.st, name = "ruleSignal", 
+         arguments = list(sigcol = "filterexit", sigval = TRUE, orderqty = "all", 
+                        ordertype = "market", orderside = "long", 
+                        replace = FALSE, prefer = "Open"), 
+         type = "exit")
+
+```
+
+**Specifying orderqty in add.rule()**
+```{r}
+# Fill in the orderqty argument in add.rule()
+add.rule(strategy.st, name = "ruleSignal", 
+         arguments = list(sigcol = "filterexit", sigval = TRUE, orderqty = "all", 
+                        ordertype = "market", orderside = "long", 
+                        replace = FALSE, prefer = "Open"), 
+         type = "exit")
+```
+
+**Specifying ordertype in add.rule()**
+```{r}
+# Fill in the ordertype argument in add.rule()
+add.rule(strategy.st, name = "ruleSignal", 
+         arguments = list(sigcol = "filterexit", sigval = TRUE, orderqty = "all", 
+                        ordertype = "market",  
+                        replace = FALSE, prefer = "Open"), 
+         type = "exit")
+
+```
+
+**Specifying orderside in add.rule()**
+```{r}
+# Fill in the orderside argument in add.rule()
+add.rule(strategy.st, name = "ruleSignal", 
+         arguments = list(sigcol = "filterexit", sigval = TRUE, orderqty = "all", 
+                        ordertype = "market", orderside = "long", 
+                        replace = FALSE, prefer = "Open"), 
+         type = "exit")
+
+```
+
+**Specifying replace in add.rule()**
+```{r}
+# Fill in the replace argument in add.rule()
+add.rule(strategy.st, name = "ruleSignal", 
+         arguments = list(sigcol = "thresholdexit", sigval = TRUE, orderqty = "all", 
+                        ordertype = "market", orderside = "long", 
+                        replace = FALSE, prefer = "Open"), 
+         type = "exit")
+
+```
+
+**Specifying prefer in add.rule()**
+
+```{r}
+# Fill in the prefer argument in add.rule()
+add.rule(strategy.st, name = "ruleSignal", 
+         arguments = list(sigcol = "thresholdexit", sigval = TRUE, orderqty = "all", 
+                        ordertype = "market", orderside = "long", 
+                        replace = FALSE, prefer = "Open"), 
+         type = "exit")
+
+```
+
+**Using add.rule() to implement an entry rule**
+```{r}
+# Create an entry rule of 1 share when all conditions line up to enter into a position
+add.rule(strategy.st, name = "ruleSignal", 
+         
+         # Use the longentry column as the sigcol
+         arguments = list(sigcol = "longentry", 
+                        
+                        # Set sigval to TRUE
+                        sigval = TRUE, 
+                        
+                        # Set orderqty to 1
+                        orderqty = 1,
+                        
+                        # Use a market type of order
+                        ordertype = "market", 
+                        
+                        # Take the long orderside
+                        orderside = "long", 
+                        
+                        # Do not replace other signals
+                        replace = FALSE, 
+                        
+                        # Buy at the next day's opening price
+                        prefer = "Open"), 
+         
+         # This is an enter type rule, not an exit
+         type = "enter")
+
+```
+
+### Order sizing functions
+
+**Implementing a rule with an order sizing function**
+```{r}
+# Add a rule that uses an osFUN to size an entry position
+add.rule(strategy = strategy.st, name = "ruleSignal",
+         arguments = list(sigcol = "longentry", sigval = TRUE, ordertype = "market",
+                          orderside = "long", replace = FALSE, prefer = "Open",
+                          
+                          # Use the osFUN called osMaxDollar
+#                          osFUN = osMaxDollar,
+                          
+                          # The tradeSize argument should be equal to tradesize (defined earlier)
+                          tradeSize = tradesize,
+                          
+                          # The maxSize argument should be equal to tradesize as well
+                          maxSize = tradesize),
+         type = "enter")
+
+```
+
+## Analyzing your strategy
+
+1. Analyzing your strategy
+Welcome to chapter 6. This is the final chapter in the course.
+
+2. Our strategy
+To review, you've put together a strategy that uses several indicators and all of the signal functions in quantstrat. To review, the strategy buys when both of these conditions first occur: the 50-day simple moving average is above the 200-day simple moving average, and the dvo, an oscillating type indicator, is under 20. It then sells when the dvo crosses above 80, or the 50-day simple moving average crosses under the 200-day simple moving average.
+
+3. Run your strategy
+This chapter is about analyzing the results of your strategy. In order to run your strategy and obtain results, you first need to call the applyStrategy function, and then update your portfolio and account, in that order. This code displays how to do just this. Here's a bit of an explanation: after you apply your strategy, you need to call functions to update R's analytics environment. You first update your portfolio with all the transactions your strategy took. Next, you take the dates of your simulation (not the first date, which is your portfolio initialization date, back from chapter two), and update your account with the results of your portfolio. Lastly, you need to update the ending equity in your account. The arguments for these updates are the portfolio and account strings you defined back in chapter two. When updating portfolio arguments, use portfolio-dot-st, and when updating account arguments, use account-dot-st.
+
+4. Trade statistics
+Next, perhaps the most vital summary of your trading strategy is the trade statistics table. The trade statistics table includes statistics such as number of trades, the percentage of trades that were positive, the profit factor--which is how many dollars the strategy made for every dollar lost, and more. For a first-pass view of trading system performance, you should always look at the trade statistics table. The statistics to pay attention to are: the number of trades, as this will let you know if you have a decent sample size or you might need more trades. The percent positive is an important number to see how often a trade can expect to go well. Lastly, the average and median win/loss ratios provide a very objective comparison between winning and losing trades, in terms of the size differences between the two. Its interpretation is what is the ratio between the average winner and the average loser, regardless of winning percentages. Essentially, percent positive and the value of the average win/loss ratio can be thought of as inversely proportional in many cases.
+
+5. Characteristics of trading systems
+In practice, strategies that use a moving average crossover as a primary signal (for example, buy when the 50 day moving average crosses above the 200) will often have less than half of their trades be winners, but will have winners that are larger than losers. For instance, it would not be out of the ordinary to see a trading system based on moving averages to have 40% of trades be positive, but a ratio of more than 2 to 1 for the average winner to the average loser. On the other hand, strategies that use an oscillation signal, such as the one developed in this class, are often characterized by a high percentage of positive trades (that is, more than one in two trades make money), but an average win to loss ratio of less than one (that is, the average loser loses more money than the average winner makes).
+
+Running your strategy
+```{r}
+# Use applyStrategy() to apply your strategy. Save this to out
+out <- applyStrategy(strategy = strategy.st, portfolios = portfolio.st)
+
+```
+```{r}
+# Update your portfolio (portfolio.st)
+updatePortf(portfolio.st)
+
+```
+
+```{r}
+daterange <- time(getPortfolio(portfolio.st)$summary)[-1]
+
+# Update your account (account.st)
+updateAcct(account.st, daterange)
+
+```
+
+```{r}
+updateEndEq(account.st)
+
+```
+
+**Profit factor**
+```{r}
+# Get the tradeStats for your portfolio
+tstats <- tradeStats(Portfolios = portfolio.st)
+# Print the profit factor
+tstats$Profit.Factor
+```
+
+### Percent positive
+
+While profit factor is one important statistic, it may be heavily influenced by only a few good trades. The percent positive statistic lets you know how many of your trades were winners. A trading system based on oscillation trading will likely have a high percentage of winners. This is certainly a statistic you should look for in your own trade statistics.
+
+Exercise: The trading statistics object you created in the last exercise (tstats) has been preloaded into your workspace. Examine it. What is the percent positive statistic?
+
+### Visualizing your strategy
+Using chart.Posn()
+```{r}
+# Use chart.Posn to view your system's performance on SPY
+chart.Posn(Portfolio = portfolio.st, Symbol = "SPY")
+
+
+```
+
+### Adding an indicator to a chart.Posn() chart
+```{r}
+
+# Compute the SMA50
+sma50 <- SMA(x = Cl(SPY), n = 50)
+
+# Compute the SMA200
+sma200 <- SMA(x = Cl(SPY), n = 200)
+
+# Compute the DVO_2_126 with an navg of 2 and a percentlookback of 126
+dvo <- DVO(HLC = HLC(SPY), navg = 2, percentlookback = 126)
+
+# Recreate the chart.Posn of the strategy from the previous exercise
+chart.Posn(Portfolio = portfolio.st, Symbol = "SPY")
+
+# Overlay the SMA50 on your plot as a blue line
+add_TA(sma50, on = 1, col = "blue")
+
+# Overlay the SMA200 on your plot as a red line
+add_TA(sma200, on = 1, col = "red")
+
+# Add the DVO_2_126 to the plot in a new window
+add_TA(dvo)
+```
+
+
+### Additional analytics
+
+Cash Sharpe ratio
+
+When working with cash profit and loss statistics, quantstrat offers a way to compute a Sharpe ratio not just from returns, but from the actual profit and loss statistics themselves. A Sharpe ratio is a metric that compares the average reward to the average risk taken. Generally, a Sharpe ratio above 1 is a marker of a strong strategy.
+
+In this exercise, you will see that because of trading P&L (profit and loss), one can compute a Sharpe ratio based on these metrics. The code below can be used to compute the Sharpe ratio based off of P&L. Copy the code in the console. In what range is the Sharpe ratio you obtain?
+
+```{r}
+# portpl <- .blotter$portfolio.firststrat$summary$Net.Trading.PL SharpeRatio.annualized(portpl, geometric=FALSE)
+
+```
+
+### Returns Sharpe ratio in quantstrat
+```{r}
+# Get instrument returns
+instrets <- PortfReturns(portfolio.st)
+
+# Compute Sharpe ratio from returns
+SharpeRatio.annualized(instrets, geometric = FALSE)
+
+```
