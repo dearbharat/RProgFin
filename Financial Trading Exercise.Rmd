@@ -21,9 +21,11 @@ quantstrat is currently only available on GitHub. If you want to install it on y
 # install.packages("PerformanceAnalytics") #if not installed
 
 # next install blotter from GitHub
-devtools::install_github("braverock/blotter", force = TRUE)
+#devtools::install_github("braverock/blotter", force = TRUE)
 # next install quantstrat from GitHub
-devtools::install_github("braverock/quantstrat", force = TRUE)
+#devtools::install_github("braverock/quantstrat", force = TRUE)
+library(blotter)
+library(quantstrat)
 ```
 
 ### Mechanics of trading
@@ -158,7 +160,7 @@ Visualize an reversion indicator
 plot(Cl(SPY))
 
 # Plot the RSI 2
-plot(RSI(Cl(SPY), n = 2))
+plot(RSI(Cl(SPY), n = 3))
 
 ```
 
@@ -235,9 +237,12 @@ calc_RSI_avg <- function(price, n1, n2) {
   return(x)
 }
 
+```
+
+```{r}
+
 # Add this function as RSI_3_4 to your strategy with n1 = 3 and n2 = 4
 add.indicator(strategy.st, name = "calc_RSI_avg", arguments = list(price=quote(Cl(mktdata)), n1 = 3, n2 = 4), label = "RSI_3_4")
-
 ```
 
 
@@ -259,16 +264,20 @@ DVO <- function(HLC, navg = 2, percentlookback = 126) {
   return(out)
 }
 
+
+```
+
+```{r}
 # Add the DVO indicator to your strategy
 add.indicator(strategy = strategy.st, name = "DVO",
               arguments = list(HLC = quote(HLC(mktdata)), navg = 2, percentlookback = 126),
               label = "DVO_2_126")
 
 ```
+
 ```{r}
 # Use applyIndicators to test out your indicators
 test <- applyIndicators(strategy = strategy.st, mktdata = OHLC(SPY))
-
 
 ```
 
@@ -280,11 +289,27 @@ test_subset <- test["2013-09-01/2013-09-05"]
 
 
 ## Signals
+
 A signal is an interaction of market data with indicators, or indicators with other indicators, which tells you whether you may wish to buy or sell an asset. Signals can be triggered for a variety of reasons. For example, a signal may be triggered by a shorter lookback moving average going from less than to greater than a longer lookback moving average. Another signal may be triggered when an oscillator goes from being above a certain set quantity to below, and so on.
 
 You will see various ways in which indicators interact with each other. To keep thing simple, you will remove all of the RSI indicators and stick to the DVO (David Varadi’s Oscillator) indicator you implemented earlier.
 
 Exercise: Subset test between September 10th, 2010, and October 10th, 2010, using test["YYYY-MM-DD/YYYY-MM-DD"]
+
+```{r}
+test_subset <- test["2010-09-10/2010-10-10"]
+
+add.indicator(strategy = strategy.st, 
+              
+              # Add the SMA function
+              name = "SMA", 
+              
+              # Create a lookback period
+              arguments = list(x = quote(Cl(prices)), n = 50), 
+              
+              # Label your indicator SMA50
+              label = "SMA50")
+```
 
 Is SMA50 greater than or less than SMA200 on September 20?
 
@@ -376,8 +401,8 @@ add.signal(strategy.st, name = "sigThreshold",
 ### Using sigFormula()
 ```{r}
 # Create your dataset: test
-test_init <- applyIndicators(strategy.st, mktdata = OHLC(SPY))
-test <- applySignals(strategy = strategy.st, mktdata = test_init)
+#test_init <- applyIndicators(strategy.st, mktdata = OHLC(SPY))
+#test <- applySignals(strategy = strategy.st, mktdata = test_init)
 ```
 
 **Combining signals - I**
