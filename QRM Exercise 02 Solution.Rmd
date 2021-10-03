@@ -1,0 +1,480 @@
+---
+title: "QRM P02"
+author: "Alexander McNeil"
+date: "10/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Real world returns are riskier than normal
+
+## The normal distribution
+### Graphical methods for assessing normality
+
+To create a histogram with 20 buckets that represents the probability density of the FTSE data, as well as how to add a normal distribution to the existing plot as a red line:
+
+hist(ftse, nclass = 20, probability = TRUE)
+lines(ftse, dnorm(ftse, mean = mu, sd = sigma), col = "red")
+
+As you can see, dnorm(x, mean, sd) calculates the probability density function (PDF) of the data x with the calculated sample mean and standard deviation; this is known as the method-of-moments.
+
+Finally, to calculate an estimate of the density of data x, use density(x). This creates a so-called kernel-density estimate (KDE) using a non-parametric method that makes no assumptions about the underlying distribution.
+
+The various plots suggest that the data are heavier tailed than normal, although you will learn about better graphical and numerical tests in future exercises.
+
+In this exercise, you will fit a normal distribution to the log-returns of the Dow Jones index for 2008-2009 and compare the data with the fitted distribution using a histogram and a density plot. 
+
+Instructions
+Calculate the average and standard deviation (sd()) of the djx data and assign to mu and sigma, respectively.
+Plot a histogram of djx with 20 buckets that represents a probability density of the data.
+Fill in the lines() and dnorm() functions to add the normal density curve for djx as a red line to the histogram.
+Plot a kernel-density estimate for djx using density().
+Use the same lines() command as above to add the normal density curve for djx as a red line to the KDE.
+
+```{r}
+
+library(qrmdata)
+data("DJ")
+
+djx <- DJ["2008/2009"]
+djx <- diff(log(djx))
+djx <- as.numeric(djx)[-1]
+djx <- sort(djx)
+
+# Calculate average and standard deviation of djx
+mu <- mean(djx)
+sigma <- sd(djx)
+
+# Plot histogram of djx
+hist(djx, nclass = 20, probability = TRUE)
+
+# Add the normal density as a red line to histogram
+lines(djx, dnorm(djx, mean = mu, sd = sigma), col = "red")
+
+
+# Plot non-parametric KDE of djx
+plot(density(djx))
+
+# Add the normal density as red line to KDE
+lines(djx, dnorm(djx, mean = mu, sd = sigma), col = "red")
+
+mu <- mean(djx)
+sigma <- sd(djx)
+te <- dnorm(djx, mean = mu, sd = sigma)
+ord <- sort(djx)
+head(ord)
+tail(ord)
+
+
+te <- dnorm(ord, mean = mu, sd = sigma)
+head(te)
+```
+
+
+
+
+The data don’t look very normal. Compare in particular the center and the tails of the histogram and density plot with the red normal curve.
+
+## Q-Q plots for assessing normality
+
+The quantile-quantile plot (Q-Q plot) is a better graphical method for revealing non-normality. In general, a Q-Q plot compares the quantiles of the data with the quantiles of a reference distribution; if the data are from a distribution of the same type (up to scaling and location), a reasonably straight line should be observed. You should know that the degrees of freedom (df) refer to the number of values or observations that can affect the system you are working with.
+
+To generate 1000 normal data points with the rnorm() function, as well as how to use qqnorm() to create the Q-Q plot, and qqline() to add a straight line for reference:
+
+data <- rnorm(1000, mean = 3, sd = 2)
+qqnorm(data)
+qqline(data)
+
+You will create a Q-Q plot of the Dow Jones log-returns in djx against the normal reference distribution, which you will add as a visual guide. You will then compare the plot with simulated datasets from normal, Student t and uniform distributions generated with the rnorm(), rt() and runif() functions. Y
+
+If the data are from a normal distribution the dots should be close to the red line (although there may be some deviation at the very end).
+
+
+Instructions
+
+Make a Q-Q plot of djx against normal with and add a red line with qqline() and col = "red" to judge whether the plot is linear.
+Calculate the length of djx with length() and assign to object n.
+Generate n standard normal variables with rnorm() and assign them to x1. Make a Q-Q plot of x1 against normal and add a red line as before.
+Generate n Student t variables with degree of freedom 4 and assign them to x2 (this has been done for you). Make a Q-Q plot of x2 against normal and add a red line.
+Generate n uniform variables and assign them to x3 (this has been done for you). Make a Q-Q plot of x3 against normal and add a red line.
+
+```{r}
+
+# Make a Q-Q plot of djx and add a red line
+qqnorm(djx)
+qqline(djx, col = "red")
+
+
+# Calculate the length of djx as n
+n <- length(djx)
+
+# Generate n standard normal variables, make a Q-Q plot, add a red line
+x1 <- rnorm(n)
+qqnorm(x1)
+qqline(x1, col = "red")
+
+
+# Generate n Student t variables, make a Q-Q plot, add a red line
+x2 <- rt(n, df = 4)
+qqnorm(x2)
+qqline(x2, col = "red")
+
+
+# Generate n standard uniform variables, make a Q-Q plot, add red line
+x3 <- runif(n)
+qqnorm(x3)
+qqline(x3, col = "red")
+```
+
+
+The Q-Q plot is a very effective tool that is widely used in applied statistical and econometric work.
+
+
+## Skewness, kurtosis and the Jarque-Bera test
+ Numerical tests of normality
+
+The moments package contains functions for computing the kurtosis and skewness of data and well as for implementing the Jarque-Bera test, which is a test of normality based on these higher-order moments. In one command, it compares the skewness and kurtosis of the data with the theoretical values for the normal distribution, which are 0 and 3, respectively.
+
+jarque.test(x)
+skewness(x, na.rm = FALSE)
+kurtosis(x, na.rm = FALSE)
+
+In this exercise, you will calculate the skewness and kurtosis for the djx, the Dow Jones index from 2008-2011, and apply the Jarque-Bera test of normality. You will then apply the same methods to djreturns, which contains 29 of the Dow Jones stocks for the same period.
+
+Recall that you can use apply(X, MARGIN, FUN, …) to apply functions over array margins. The MARGIN parameter is a vector indicating where the function will be applied; in this instance, you will use 2 to specify that the function FUN should be applied to the columns in matrix X.
+
+
+Instructions
+Calculate the skewness and kurtosis of the Dow Jones index returns in djx using skewness() and kurtosis(), respectively.
+Carry out a Jarque-Bera test of normality for djx using jarque.test().
+Use apply() to calculate the skewness and kurtosis of the individual equity returns in djreturns assigning the results to s and k, respectively.
+Fill in plot() to plot k against s with parameter type = "n", and then place the stock symbols at the points with the command text() (this has been done for you).
+Use apply() to carry out the Jarque-Bera test for each of the Dow Jones constituents in djreturns.
+
+```{r}
+
+
+dj <- DJ["2008/2011"]
+djx <- diff(log(dj))
+djx <- as.numeric(djx)[-1]
+djx <- sort(djx)
+library(zoo)
+# Load DJ constituents data
+data(DJ_const)
+djstocks <- DJ_const["2008/2011"]
+djreturns <- diff(log(djstocks))[-1]
+
+library(moments)
+
+# Calculate skewness and kurtosis of djx
+skewness(djx)
+
+
+kurtosis(djx)
+
+
+# Carry out a Jarque-Bera test for djx
+jarque.test(djx)
+
+
+# Calculate skewness and kurtosis of djreturns 
+s <- apply(djreturns, 2, skewness)
+k <- apply(djreturns, 2, kurtosis)
+
+# Plot k against s and add text labels to identify stocks
+plot(s, k, type = "n")
+text(s, k, names(s), cex = 0.6)
+
+
+# Carry out Jarque-Bera tests for each constituent in djreturns
+apply(djreturns, 2, jarque.test)
+```
+
+
+The return distributions of the Dow Jones stocks all have high kurtosis and some of them are quite skewed.
+
+### Testing normality for longer time horizons
+
+As returns are added together over longer time periods, a central limit effect takes place and returns tend to become more normal.
+
+In this exercise, you will use aggregation functions that you learned in the first chapter to aggregate the data in djx_d, containing the daily log-returns for 29 of the Dow Jones stocks for the period 2000-2015.
+
+
+Instructions
+Calculate weekly and monthly log-returns of djx_d and assign to djx_w and djx_m, respectively.
+Fill in apply() to calculate the p-value of the Jarque-Bera test for each of the Dow Jones daily return series in djx_d.
+Do the same for the weekly equity returns in djx_w.
+Do the same for the monthly equity returns in djx_m.
+
+```{r}
+
+djstocks <- DJ_const["2000/2015"]
+djreturns <- diff(log(djstocks))[-1]
+djx_d <- djreturns
+# Calculate weekly and monthly log-returns from djx_d
+library(xts)
+djx_w <- apply.weekly(djx_d, colSums)
+djx_m <- apply.monthly(djx_d, colSums)
+
+# Calculate the p-value for each series in djx_d
+apply(djx_d, 2, function(v){jarque.test(v)$p.value})
+```
+
+```{r}
+# Calculate the p-value for each series in djx_w
+apply(djx_w, 2, function(v){jarque.test(v)$p.value})
+```
+
+
+
+```{r}
+# Calculate the p-value for each series in djx_m
+apply(djx_m, 2, function(v){jarque.test(v)$p.value})
+```
+ 
+Although the p-values get larger, all monthly returns other than for Chevron (CVX), 3M (MMM), and Pfizer (PFE) still fail the normality test.
+
+## Overlapping returns
+
+When you aggregate series by summing daily log-returns into longer intervals, you analyze a smaller amount of observations. To preserve the quantity of data, you can calculate overlapping returns with the rollapplyr() function; this also creates strong correlations between observations.
+
+There are 5 trading days in the average calendar week. By computing the 5-day moving sums of the log-returns of daily index data, you obtain approximate overlapping weekly returns ending on each calendar week. Similarly, calculating 21-day moving sums gives approximate overlapping monthly returns, and calculating 63-day moving sums gives approximate overlapping quarterly returns. Let’s look at an example with the Dow Jones daily return data in djx. Because 5 values are used to calculate each moving sum, the first 4 values in the result are NA. In this instance, we will use indexing to remove them:
+
+
+
+```{r}
+
+dj <- DJ["2008/2011"]
+djx <- diff(log(dj))[-1]
+djx5 <- rollapplyr(djx, width = 5, FUN = sum)
+head(djx5)
+
+djx5 <- djx5[-(1:4)]
+
+```
+
+
+In this exercise, you will calculate moving sums of different intervals from djx, which is loaded in your workspace. You will then find the skewness and kurtosis of the resulting data and conduct the Jarque-Bera test just as you have in previous exercises. Do the overlapping returns appear more normal?
+
+
+Instructions
+
+Calculate a 21-day moving sum of the log-returns in djx, remove the first 20 values, and assign to djx21.
+Calculate a 63-day moving sum of the log-returns in djx, remove the first 62 values, and assign to djx63
+Use merge() and all = FALSE to merge djx, djx21, and djx63 in that order, then assign to djx2. Plot it with plot.zoo().
+Use apply() and the appropriate functions to compute the skewness and kurtosis for each of the series in djx2.
+Use apply() and the appropriate function to conduct the Jarque-Bera test on each of the series in djx2.
+
+```{r}
+
+# Calculate a 21-day moving sum of djx
+djx21 <- rollapplyr(djx, width = 21, FUN = sum)[-(1:20)]
+
+# Calculate a 63-day moving sum of djx
+djx63 <- rollapplyr(djx, width = 63, FUN = sum)[-(1:62)]
+
+# Merge the three series and plot
+djx2 <- merge(djx, djx21, djx63, all = FALSE)
+plot.zoo(djx2)
+
+
+# Compute the skewness and kurtosis for each series in djx2
+apply(djx2, 2, skewness)
+
+apply(djx2, 2, kurtosis)
+
+
+# Conduct the Jarque-Bera test to each series in djx2
+apply(djx2, 2, jarque.test)
+```
+
+
+These overlapping returns are highly correlated and even more difficult to interpret.
+
+## Fitting t distribution to data
+
+A Student t distribution is generally a much better fit to daily, weekly, and monthly returns than a normal distribution.
+
+You can create one by using the fit.st() function in the QRM package. The resulting fitted model has a parameter estimates component par.ests which can be assigned to a list tpars in order to store its values of nu, mu, and sigma for later use:
+
+
+You will fit a Student t distribution to the daily log-returns of the Dow Jones index from 2008-2011 contained in djx. Then, you will plot a histogram of the data and superimpose a red line to the plot showing the fitted t density.
+
+
+Instructions
+
+Use fit.st() to fit a Student t distribution to the data in djx and assign the results to tfit.
+Assign the par.ests component of the fitted model to tpars and the elements of tpars to nu, mu, and sigma, respectively.
+Fill in hist() to plot a histogram of djx.
+Fill in dt() to compute the fitted t density at the values djx and assign to yvals. Refer to the video for this equation.
+Fill in lines() to add a red line to the histogram of djx showing the fitted t density.
+
+```{r}
+library(QRM)
+djx <- as.numeric(djx)
+djx <- sort(djx)
+# Fit a Student t distribution to djx
+tfit <- fit.st(djx)
+
+# Define tpars, nu, mu, and sigma
+tpars <- tfit$par.ests
+nu <- tpars[1]
+mu <- tpars[2]
+sigma <- tpars[3]
+
+# Plot a histogram of djx
+hist(djx, nclass = 20, probability = TRUE, ylim = range(0, 40))
+
+# Compute the fitted t density at the values djx
+yvals <- dt((djx - mu)/sigma, df = nu)/sigma
+
+# Superimpose a red line to show the fitted t density
+lines(djx, yvals, col = "red")
+
+```
+
+The fitted Student t distribution looks a lot better than the normal did.
+
+## Testing FX returns for normality
+
+So far, the exercises in this chapter have examined the normality of equity index returns and individual equity returns.
+
+To reinforce these ideas, you will apply similar ideas to exchange-rate log-returns. The dataset fx_d contains daily log-returns of the EUR/USD, GBP/USD and JPY/USD exchange rates for the period 2001-2015, and the dataset fx_m contains the corresponding monthly log-returns. Which of the monthly log-return series appears the most normal?
+
+```{r}
+data("EUR_USD")
+data("GBP_USD")
+data("JPY_USD")
+fx1 <- EUR_USD["2001/2015"]
+fx2 <- GBP_USD["2001/2015"]
+fx3 <- JPY_USD["2001/2015"]
+fx <- merge(fx1, fx2, fx3)
+fx_d <- apply(log(fx), 2, diff)
+fx_m <- apply.monthly(fx_d, colSums)
+
+```
+
+
+
+Instructions
+
+Plot the daily exchange-rate log-return series in fx_d with the appropriate plotting function.
+Use apply() to conduct the Jarque-Bera test on each of the series in fx_d.
+Plot the monthly log-return series in fx_m with the same plotting function and parameter type = "h".
+Use apply() to conduct the Jarque-Bera test on each of series in fx_m.
+Fill in apply() to fit a Student t distribution to each of the series in fx_m and obtain the parameter estimates.
+
+```{r}
+
+# Plot the daily log-return series in fx_d
+plot.zoo(fx_d, type = "h")
+
+
+# Apply the Jarque-Bera test to each of the series in fx_d
+apply(fx_d, 2, jarque.test)
+
+```
+```{r}
+
+# Plot the monthly log-return series in fx_m
+plot.zoo(fx_m, type = "h")
+
+
+# Apply the Jarque-Bera test to each of the series in fx_m
+apply(fx_m, 2, jarque.test)
+```
+
+```{r}
+# Fit a Student t distribution to each of the series in fx_m
+apply(fx_m, 2, function(v){fit.st(v)$par.ests})
+```
+
+
+JPY/USD exchange rate log-returns appear to be the most normal.
+
+## Testing interest-rate returns for normality
+
+The object zcbx_m contains monthly log-return series for the 1-year, 5-year and 10-year Canadian zero-coupon bond yields. The object zcbx2_m contains the corresponding simple returns. Both are multivariate; they are loaded into your workspace.
+
+In this exercise, you will plot these interest rate return series and then examine their normality with Q-Q plots and Jarque-Bera tests.
+
+The log-returns show clearer evidence of non-normality than the simple returns in this case.
+
+```{r}
+data("ZCB_CAD")
+zcb <- ZCB_CAD[,c("1.00y", "5.00y", "10.00y")]
+zcbx <- diff(log(zcb))
+zcbx2 <- diff(zcb)
+zcbx_m <- apply.monthly(zcbx, colSums)["2006/2015"]
+zcbx2_m<- apply.monthly(zcbx2, colSums)["2006/2015"]
+```
+
+
+
+Instructions
+Plot zcbx_m and zcbx2_m with the appropriate plotting function and the parameter type = "h".
+Use brackets for indexing and qqnorm() to create Q-Q plots of the 3rd component series of zcbx_m and zcbx2_m.
+Use apply() to compute the kurtosis of each component series in zcbx_m and zcbx2_m.
+Use apply() to conduct the Jarque-Bera test on each component series in zcbx_m and zcbx2_m.
+
+```{r}
+# Plot the interest-rate return series zcbx_m and zcbx2_m
+plot.zoo(zcbx_m, type = "h")
+
+plot.zoo(zcbx2_m, type = "h")
+
+
+# Make Q-Q plots of the 3rd component series of zcbx_m and zcbx2_m
+qqnorm(zcbx_m[,3])
+
+qqnorm(zcbx2_m[,3])
+
+
+# Compute the kurtosis of each series in zcbx_m and zcbx2_m
+apply(zcbx_m, 2, kurtosis)
+
+
+apply(zcbx2_m, 2, kurtosis)
+
+
+# Conduct the Jarque-Bera test on each series in zcbx_m and zcbx2_m
+apply(zcbx_m, 2, jarque.test)
+```
+
+```{r}
+apply(zcbx2_m, 2, jarque.test)
+
+```
+
+
+Note how the simple monthly returns for the 5 and 10 year yields did not fail the normality test.
+
+## Testing gold price returns for normality
+
+The object goldx_q contains quarterly log-returns of the gold price from the beginning of 1990 to the end of 2015.
+
+Test the data for normality using the Jarque-Bera test, then fit a Student t distribution and find the estimated degree of freedom ν^ to the nearest integer.
+
+```{r}
+data("GOLD")
+gold <- GOLD["1990/2015"]
+goldx <- diff(log(gold))[-1]
+goldx_q <- as.numeric(apply.quarterly(goldx, sum)[,1])
+jarque.test(goldx_q)
+
+```
+
+
+```{r}
+
+tfit <- fit.st(goldx_q)
+
+tpars <- tfit$par.ests
+
+tpars[1]
+```
+
+The data fail a test of normality and ν̂ =10

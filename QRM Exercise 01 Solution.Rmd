@@ -13,10 +13,9 @@ knitr::opts_chunk$set(echo = TRUE)
 Alex McNeil is author of Quantitative Risk Management: Concepts, Techniques and Tools.
 The associated tutorial is on the website [qrmtutorial](https://qrmtutorial.org/)
 
-We use three packages here:
+We use two packages here:
 1. qrmdata: financial dataset
 2. qrmtools: Necessary functions
-3. QRM: data manipulation
 
 ### Why QRM?
 In QRM, the goal is to quantify the risk of a portfolio of risky assets. Measuring the risk is the first step towards managing the risk. we can consider the typical portfolios of risky assets held by banks and insurance companies, and sometimes also their liabilities. But the ideas apply equally to the portfolio of a private investor. 
@@ -36,7 +35,6 @@ Think of a portfolio of risky assets. It might contain some stock index trackers
 The value of this portfolio at any point in time depends on the fluctuating values of many underlying quantities, which we call risk factors. Examples of risk factors are equity indexes, individual equity prices, foreign exchange rates, interest rates for different borrowing periods (in the case of bonds), and commodity prices. 
 
 Let's load the QRMdata package and then the dataset SP500. This contains daily values of the well-known equity index based on 500 of the most important US stocks.
-
 ### Analyzing risk factors with R
 ```{r}
 library(qrmdata)
@@ -68,22 +66,22 @@ If you want to extract the data from a certain date range, for example from Apri
     Plot the dj0809 using the same plotting function as above.
 
 ```{r}
-library(zoo)
+library(xts)
 # Load DJ index
-data("DJ")
+data(DJ)
 
 # Show head() and tail() of DJ index
 head(DJ)
 tail(DJ)
 
 # Plot DJ index
-plot.zoo(DJ)
+plot(DJ)
 
 # Extract 2008-2009 and assign to dj0809
 dj0809 <- DJ["2008-01-01/2009-12-31"]
 
 # Plot dj0809
-plot.zoo(dj0809)
+plot(dj0809)
 ```
 
 ## Exploring risk-factor time series: individual equities
@@ -110,12 +108,14 @@ library(zoo)
 data(DJ_const)
 
 # Apply names() and head() to DJ_const
+names(DJ_const)
+head(DJ_const)
 
 # Extract AAPL and GS in 2008-09 and assign to stocks
-stocks <- 
+stocks <- DJ_const["2008/2009",c("AAPL","GS")]
 
 # Plot stocks with plot.zoo()
-
+plot.zoo(stocks)
 ```
 
 ## Exploring risk-factor data: exchange rates
@@ -137,18 +137,20 @@ Instructions
 # Load exchange rate data
 data("GBP_USD")
 data("EUR_USD")
-
 # Plot the two exchange rates
-
+plot(GBP_USD)
+plot(EUR_USD)
 # Plot a USD_GBP exchange rate
+plot(1/GBP_USD)
 
 # Merge the two exchange rates GBP_USD and EUR_USD
-fx <- 
+fx <- merge(GBP_USD, EUR_USD, all = TRUE)
 
 # Extract 2010-15 data from fx and assign to fx0015
-fx0015 <- 
+fx0015 <- fx["2010/2015"]
 
 # Plot the exchange rates in fx0015
+plot.zoo(fx0015)
 ```
 
 # 1. Risk-factor returns
@@ -207,27 +209,29 @@ Instructions
 ```{r}
 library(qrmdata)
 library(qrmtools)
-data(djstocks)
 # Compute the log-returns of dj0809 and assign to dj0809_x
-dj0809_x <- 
+dj0809_x <- diff(log(dj0809))
 
 # Plot the log-returns
+plot(dj0809_x)
 
 ```
+
 ```{r}
 # Compute the log-returns of djstocks and assign to djstocks_x
 djstocks <- DJ_const["2008/2009", c("AAPL", "GS")]
-djstocks_x <- 
+djstocks_x <- diff(log(djstocks))
 
 # Plot the two share returns
-
+plot.zoo(djstocks_x)
 ```
 
 ```{r}
 # Compute the log-returns of GBP_USD and assign to erate_x
-erate_x <- 
+erate_x <- diff(log(GBP_USD))
 
 # Plot the log-returns
+plot(erate_x)
 ```
 The return series often just look like noise with some periods of larger fluctuations. You’ll discover later that they typically have a lot of interesting structure.
 
@@ -251,6 +255,7 @@ Instructions
 ```{r}
 djstocks <- DJ_const["2008/2009", c("AAPL", "AXP", "BA", "CAT")]
 # Plot djstocks in four separate plots
+plot.zoo(djstocks)
 
 
 # Plot djstocks in one plot and add legend
@@ -259,12 +264,14 @@ legend(julian(x = as.Date("2009-01-01")), y = 70, legend = names(DJ_const)[1:4],
 
 
 # Compute log-returns and assign to djstocks_x
-djstocks_x <- 
+djstocks_x <- diff(log(djstocks))
 
 # Plot djstocks_x in four separate plots
+plot.zoo(djstocks_x)
 
 
 # Plot djstocks_x with vertical bars
+plot.zoo(djstocks_x, type = "h")
 
 ```
 
@@ -298,18 +305,24 @@ djstocks <- DJ_const["2000/2015",c("AAPL", "AXP", "BA", "CAT")]
 djreturns <- diff(log(djstocks))
 
 # Plot djx
+plot(djx)
 
+library(xts)
 
 # Plot weekly log-returns of djx
+plot(apply.weekly(djx, sum), type = "h")
 
 
 # Plot monthly log-returns of djx
+plot(apply.monthly(djx, sum), type = "h")
 
 
 # Plot djreturns
+plot.zoo(djreturns)
 
 
 # Plot monthly log-returns of djreturns
+plot.zoo(apply.monthly(djreturns, colSums), type = "h")
 ```
 
 These aggregation functions are extremely useful as for analyzing risk over longer time horizons.
@@ -349,12 +362,14 @@ data("GOLD")
 gold <- GOLD["1990/2015"]
 
 # Plot gold and oil prices
+plot(gold)
 
+plot(oil)
 
 
 # Calculate daily log-returns
-goldx <- 
-oilx <- 
+goldx <- diff(log(gold))
+oilx <- diff(log(oil))
 
 # Calculate monthly log-returns
 goldx_m <- apply.monthly(goldx, sum)
@@ -364,9 +379,11 @@ oilx_m <- apply.monthly(oilx, sum)
 coms <- merge(goldx_m, oilx_m)
 
 # Plot coms with vertical bars
+plot.zoo(coms, type = "h")
 
 
 # Make a pairwise scatterplot of coms
+pairs(as.zoo(coms))
 ```
 
 
@@ -407,13 +424,15 @@ maturity <- c(0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3,
 
 yield_cols <- c("1.00y", "5.00y", "10.00y")
 # Compute log-returns as zcb_x and simple returns as zcb_x2
-zcb_x <- 
-zcb_x2 <- 
+zcb_x <- diff(log(zcb))
+zcb_x2 <- diff(zcb)
 
 # Plot zcb_x for 1, 5 and 10-year maturities
+plot.zoo(zcb_x[, yield_cols])
 
 
 # Plot zcb_x2 for 1, 5 and 10-year maturities
+plot.zoo(zcb_x2[, yield_cols])
 
 
 # Plot the yield curve for the first day of zcb
